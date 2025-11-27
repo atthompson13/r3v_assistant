@@ -74,9 +74,9 @@ async def recruit(interaction: discord.Interaction):
     channel = interaction.channel
     thread_name = f"Recruit-{interaction.user.name}"
 
-    # Prevent duplicate threads
+    # Prevent duplicate threads (case-insensitive)
     for thread in channel.threads:
-        if thread.name == thread_name:
+        if thread.name.lower() == thread_name.lower():
             await interaction.response.send_message(
                 "❌ You already have an open recruit thread.", ephemeral=True
             )
@@ -87,29 +87,44 @@ async def recruit(interaction: discord.Interaction):
         "✅ Creating your recruitment thread...", ephemeral=True
     )
 
-    # Create private thread
-    thread = await channel.create_thread(
-        name=thread_name,
-        type=discord.ChannelType.private_thread,
-        invitable=False
-    )
+    try:
+        # Create private thread
+        thread = await channel.create_thread(
+            name=thread_name,
+            type=discord.ChannelType.private_thread,
+            invitable=False
+        )
 
-    # Ping Recruiter role directly
-    recruiter_role = guild.get_role(RECRUITER_ROLE_ID)
-    ping_text = recruiter_role.mention if recruiter_role else ""
-    
-    welcome_message = (
-        f"{ping_text}\n"
-        f"👋 {interaction.user.mention} has started a recruitment thread!\n\n"
-        "We're glad you're interested in joining us! To get started, auth all your characters that "
-        "you're going to recruit into the corporation with our alliance here: "
-        "https://auth.black-rose.space\n\n"
-        "Once that's finished, reply back here and let us know your in-game names that you registered. "
-        "While you're at it, tell us a little bit about yourself!"
-    )
+        # Add the user to the thread so they can see it
+        await thread.add_user(interaction.user)
 
-    await thread.send(welcome_message)
-    await log_action(guild, f"{interaction.user} created recruitment thread {thread.name}.")
+        # Ping Recruiter role directly
+        recruiter_role = guild.get_role(RECRUITER_ROLE_ID)
+        if recruiter_role:
+            # Add all members with recruiter role to thread
+            for member in recruiter_role.members:
+                await thread.add_user(member)
+            ping_text = recruiter_role.mention
+        else:
+            ping_text = ""
+        
+        welcome_message = (
+            f"{ping_text}\n"
+            f"👋 {interaction.user.mention} has started a recruitment thread!\n\n"
+            "We're glad you're interested in joining us! To get started, auth all your characters that "
+            "you're going to recruit into the corporation with our alliance here: "
+            "https://auth.black-rose.space\n\n"
+            "Once that's finished, reply back here and let us know your in-game names that you registered. "
+            "While you're at it, tell us a little bit about yourself!"
+        )
+
+        await thread.send(welcome_message)
+        await log_action(guild, f"{interaction.user} created recruitment thread {thread.name}.")
+    except discord.Forbidden:
+        await interaction.followup.send("❌ I don't have permission to create threads.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to create thread: {e}", ephemeral=True)
+        print(f"Thread creation error: {e}")
 
 # ----------------------------
 # /officer Command (10 min cooldown)
@@ -125,9 +140,9 @@ async def officer(interaction: discord.Interaction):
     channel = interaction.channel
     thread_name = f"officer-{interaction.user.name}"
 
-    # Prevent duplicate threads
+    # Prevent duplicate threads (case-insensitive)
     for thread in channel.threads:
-        if thread.name == thread_name:
+        if thread.name.lower() == thread_name.lower():
             await interaction.response.send_message(
                 "❌ You already have an open officer thread.", ephemeral=True
             )
@@ -137,23 +152,38 @@ async def officer(interaction: discord.Interaction):
         "✅ Creating your officer thread...", ephemeral=True
     )
 
-    thread = await channel.create_thread(
-        name=thread_name,
-        type=discord.ChannelType.private_thread,
-        invitable=False
-    )
+    try:
+        thread = await channel.create_thread(
+            name=thread_name,
+            type=discord.ChannelType.private_thread,
+            invitable=False
+        )
 
-    # Ping Director role directly
-    director_role = guild.get_role(DIRECTOR_ROLE_ID)
-    ping_text = director_role.mention if director_role else ""
+        # Add the user to the thread so they can see it
+        await thread.add_user(interaction.user)
 
-    welcome_message = (
-        f"{ping_text}\n"
-        f"👋 {interaction.user.mention} has started a thread for officer discussion."
-    )
+        # Ping Director role directly
+        director_role = guild.get_role(DIRECTOR_ROLE_ID)
+        if director_role:
+            # Add all members with director role to thread
+            for member in director_role.members:
+                await thread.add_user(member)
+            ping_text = director_role.mention
+        else:
+            ping_text = ""
 
-    await thread.send(welcome_message)
-    await log_action(guild, f"{interaction.user} created officer thread {thread.name}.")
+        welcome_message = (
+            f"{ping_text}\n"
+            f"👋 {interaction.user.mention} has started a thread for officer discussion."
+        )
+
+        await thread.send(welcome_message)
+        await log_action(guild, f"{interaction.user} created officer thread {thread.name}.")
+    except discord.Forbidden:
+        await interaction.followup.send("❌ I don't have permission to create threads.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to create thread: {e}", ephemeral=True)
+        print(f"Thread creation error: {e}")
 
 # ----------------------------
 # /close Command (Directors only)
@@ -164,10 +194,10 @@ async def officer(interaction: discord.Interaction):
     guild=discord.Object(id=GUILD_ID)
 )
 async def close(interaction: discord.Interaction):
-    director_role = interaction.guild.get_role(DIRECTOR_ROLE_ID)
-    if director_role not in interaction.user.roles:
+    # Check if user has director role by ID
+    if not any(role.id == DIRECTOR_ROLE_ID for role in interaction.user.roles):
         await interaction.response.send_message(
-            "❌ You don’t have permission to use this command.", ephemeral=True
+            "❌ You don't have permission to use this command.", ephemeral=True
         )
         return
 
@@ -196,10 +226,10 @@ async def close(interaction: discord.Interaction):
 )
 @app_commands.describe(days="Days until reminder", hours="Hours until reminder", minutes="Minutes until reminder", message="Reminder message")
 async def remind(interaction: discord.Interaction, days: int = 0, hours: int = 0, minutes: int = 0, message: str = "Reminder!"):
-    director_role = interaction.guild.get_role(DIRECTOR_ROLE_ID)
-    if director_role not in interaction.user.roles:
+    # Check if user has director role by ID
+    if not any(role.id == DIRECTOR_ROLE_ID for role in interaction.user.roles):
         await interaction.response.send_message(
-            "❌ You don’t have permission to use this command.", ephemeral=True
+            "❌ You don't have permission to use this command.", ephemeral=True
         )
         return
 
@@ -207,6 +237,10 @@ async def remind(interaction: discord.Interaction, days: int = 0, hours: int = 0
     if total_seconds <= 0:
         await interaction.response.send_message("⚠️ Please specify a valid time.", ephemeral=True)
         return
+    
+    # Store channel reference before async sleep
+    reminder_channel = interaction.channel
+    reminder_user = interaction.user
 
     await interaction.response.send_message(
         f"⏰ Reminder set for {days}d {hours}h {minutes}m from now.", ephemeral=True
@@ -214,7 +248,16 @@ async def remind(interaction: discord.Interaction, days: int = 0, hours: int = 0
     await log_action(interaction.guild, f"{interaction.user} set a reminder for {days}d {hours}h {minutes}m: {message}")
 
     await asyncio.sleep(total_seconds)
-    await interaction.user.send(f"🔔 Reminder: {message}")
+    
+    # Post reminder in the same channel/thread where it was set
+    try:
+        await reminder_channel.send(f"🔔 {reminder_user.mention} Reminder: {message}")
+    except:
+        # Fallback to DM if channel is no longer accessible
+        try:
+            await reminder_user.send(f"🔔 Reminder from {interaction.guild.name}: {message}")
+        except:
+            pass  # User has DMs disabled
 
 # ----------------------------
 # Error Handler
