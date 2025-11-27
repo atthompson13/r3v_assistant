@@ -1,0 +1,43 @@
+Changelog - Discord Recruitment Bot
+Fixed Issues
+🐛 Critical Bug: Users couldn't see their own threads
+Problem: Private threads were created but the requesting user wasn't added as a member
+Fix: Added await thread.add_user(interaction.user) in both /recruit and /officer commands
+Impact: Users can now actually see and participate in the threads they create
+
+🐛 Role members not automatically added to threads
+Problem: Only role mentions were sent, but role members couldn't see private threads
+Fix: Now loops through all members with the appropriate role and adds them to the thread
+Lines affected: 104-109 (recruit), 168-173 (officer)
+  
+🔍 Case-sensitive duplicate thread detection
+Problem: Users could create multiple threads like "Recruit-John" and "recruit-john"
+Fix: Changed to case-insensitive comparison using .lower()
+Lines affected: 79, 149
+  
+🛡️ Unreliable role permission checking
+Problem: role in user.roles could fail silently
+Fix: Changed to any(role.id == ROLE_ID for role in user.roles) for more reliable ID-based checking
+Lines affected: 204, 232
+  
+📬 Reminder command sent DMs instead of posting in channel
+Problem: Reminders would DM the user, losing context of which thread it was about
+Fix: Now posts reminder in the same channel/thread where it was set, with DM as fallback
+Lines affected: 242-252
+  
+🛡️ Missing error handling for thread creation
+Problem: Thread creation could fail (permissions, rate limits) without graceful handling
+Fix: Wrapped thread creation in try-except blocks with user-friendly error messages
+Lines affected: 93-133, 157-188
+  
+📝 Reminder command loses context on channel deletion
+Problem: If channel/thread was deleted before reminder fired, bot would crash
+Fix: Added fallback to DM user if channel is no longer accessible
+Lines affected: 247-252
+  
+Remaining Limitations
+⚠️ Reminder persistence: Reminders won't survive a bot restart (requires database)
+⚠️ No auto-cleanup: Old archived threads aren't automatically deleted
+⚠️ Assumes "bot-logs" channel exists: Logging will silently fail if channel doesn't exist
+
+Total lines modified: ~70 lines across 8 different sections
